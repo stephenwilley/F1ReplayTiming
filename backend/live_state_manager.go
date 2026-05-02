@@ -234,6 +234,7 @@ func (m *liveStateManager) processSectors(d *liveDriverState, sectorsRaw any) {
 		}
 		if secNum == 3 {
 			d.s3CompletedAt = time.Now()
+			m.evaluateLapForTrack(d)
 		} else if secNum == 1 {
 			d.s3CompletedAt = time.Time{}
 		}
@@ -349,6 +350,12 @@ func (m *liveStateManager) handlePosition(data map[string]any) {
 	for _, s := range batch {
 		d := m.getDriver(s.number)
 		d.OnTrack = strings.EqualFold(strings.TrimSpace(s.status), "OnTrack")
+		if d.OnTrack && !d.Retired && !m.liveTrackLocked && !m.liveTrackPresetNorm {
+			d.lapPositionSamples = append(d.lapPositionSamples, posSample{T: m.lastTimestamp, X: s.x, Y: s.y})
+			if len(d.lapPositionSamples) > 5000 {
+				d.lapPositionSamples = d.lapPositionSamples[len(d.lapPositionSamples)-5000:]
+			}
+		}
 		nx := (s.x - xMin) / scale
 		ny := (s.y - yMin) / scale
 		if len(m.trackPoints) == 0 {
@@ -372,6 +379,58 @@ func (m *liveStateManager) handlePosition(data map[string]any) {
 		d.Y = m.trackPoints[nearestIdx].Y
 		d.RelativeDistance = float64(nearestIdx) / float64(len(m.trackPoints))
 	}
+}
+
+func (m *liveStateManager) evaluateLapForTrack(d *liveDriverState) {
+	defer func() { d.lapPositionSamples = nil }()
+
+	if m.liveTrackLocked || m.liveTrackPresetNorm {
+		return
+	}
+	if d.InPit || d.Retired {
+		return
+	}
+	if len(d.lapPositionSamples) < 120 {
+		return
+	}
+
+	pts := sanitizeTrackLap(d.lapPositionSamples)
+	if len(pts) < 120 {
+		return
+	}
+
+	xMin, yMin, scale := boundsForTrack(pts)
+	if scale <= 0 {
+		return
+	}
+
+	closure := trackClosureRatio(pts)
+	if closure > 0.25 {
+		return
+	}
+
+	m.liveTrackLapCount++
+
+	if closure >= m.liveTrackBestClosure {
+		return
+	}
+
+	step := 1
+	if len(pts) > 2000 {
+		step = len(pts) / 2000
+	}
+	out := make([]liveTrackPoint, 0, len(pts)/step+1)
+	for i := 0; i < len(pts); i += step {
+		out = append(out, liveTrackPoint{
+			X: normalizeCoord(pts[i].X, xMin, scale),
+			Y: normalizeCoord(pts[i].Y, yMin, scale),
+		})
+	}
+
+	m.trackPoints = out
+	m.trackNorm = &liveTrackNorm{XMin: xMin, YMin: yMin, Scale: scale}
+	m.liveTrackBestClosure = closure
+	m.liveTrackVersion++
 }
 
 func (m *liveStateManager) handleTimingAppData(data map[string]any) {
@@ -790,6 +849,22 @@ func (m *liveStateManager) Frame() map[string]any {
 		rc = append(rc, m.rcMessages[i])
 	}
 
+	var liveTrack map[string]any
+	if !m.liveTrackPresetNorm && len(m.trackPoints) > 0 {
+		points := make([]map[string]any, 0, len(m.trackPoints))
+		for _, p := range m.trackPoints {
+			points = append(points, map[string]any{
+				"x": sanitizeNumber(p.X),
+				"y": sanitizeNumber(p.Y),
+			})
+		}
+		liveTrack = map[string]any{
+			"version":      m.liveTrackVersion,
+			"locked":       m.liveTrackLocked,
+			"track_points": points,
+		}
+	}
+
 	frame := map[string]any{
 		"timestamp":    sanitizeNumber(m.lastTimestamp),
 		"lap":          m.currentLap,
@@ -800,6 +875,7 @@ func (m *liveStateManager) Frame() map[string]any {
 		"quali_phase":  qualiPhase,
 		"drivers":      drivers,
 		"rc_messages":  rc,
+		"live_track":   liveTrack,
 	}
 	if isRace && m.pitLoss.Green > 0 {
 		addPitPredictions(frame, m.pitLoss)

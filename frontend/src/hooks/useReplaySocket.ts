@@ -62,6 +62,12 @@ export interface RCMessage {
   racing_number?: string;
 }
 
+export interface LiveTrackData {
+  version: number;
+  locked: boolean;
+  track_points: { x: number; y: number }[];
+}
+
 export interface ReplayFrame {
   timestamp: number;
   lap: number;
@@ -74,6 +80,7 @@ export interface ReplayFrame {
   rc_messages?: RCMessage[];
   red_flag_end?: number;
   sector_flags?: { sector: number; flag: string; driver: string }[];
+  live_track?: LiveTrackData | null;
 }
 
 export interface QualiPhaseInfo {

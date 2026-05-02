@@ -52,6 +52,8 @@ type liveDriverState struct {
 	sectorBestPersonal map[int]float64
 	sectorTimes        map[int]float64
 	s3CompletedAt      time.Time
+
+	lapPositionSamples []posSample
 }
 
 func newLiveDriverState(number string) *liveDriverState {
@@ -96,21 +98,31 @@ type liveStateManager struct {
 	rawYMin         float64
 	rawYMax         float64
 	positionSamples int
+
+	rotation float64
+
+	liveTrackBestClosure float64
+	liveTrackLapCount    int
+	liveTrackLocked      bool
+	liveTrackVersion     int
+	liveTrackPresetNorm  bool
 }
 
 func newLiveStateManager(sessionType string, pit pitLossValues, trackNorm *liveTrackNorm, trackPoints []liveTrackPoint) *liveStateManager {
 	return &liveStateManager{
-		sessionType:       strings.ToUpper(strings.TrimSpace(sessionType)),
-		pitLoss:           pit,
-		trackNorm:         trackNorm,
-		trackPoints:       trackPoints,
-		drivers:           make(map[string]*liveDriverState),
-		status:            "green",
-		sessionStatus:     "Inactive",
-		overallSectorBest: make(map[int]float64),
-		rawXMin:           math.Inf(1),
-		rawXMax:           math.Inf(-1),
-		rawYMin:           math.Inf(1),
-		rawYMax:           math.Inf(-1),
+		sessionType:          strings.ToUpper(strings.TrimSpace(sessionType)),
+		pitLoss:              pit,
+		trackNorm:            trackNorm,
+		trackPoints:          trackPoints,
+		drivers:              make(map[string]*liveDriverState),
+		status:               "green",
+		sessionStatus:        "Inactive",
+		overallSectorBest:    make(map[int]float64),
+		rawXMin:              math.Inf(1),
+		rawXMax:              math.Inf(-1),
+		rawYMin:              math.Inf(1),
+		rawYMax:              math.Inf(-1),
+		liveTrackBestClosure: math.MaxFloat64,
+		liveTrackPresetNorm:  trackNorm != nil,
 	}
 }

@@ -198,8 +198,14 @@ export default function LivePage() {
 
   // Session ended - no longer block the view; show inline banner instead
 
-  const trackPoints = trackData?.track_points || [];
-  const rotation = trackData?.rotation || 0;
+  const liveTrack = live.frame?.live_track ?? null;
+  const trackPoints = liveTrack?.track_points && liveTrack.track_points.length > 0
+    ? liveTrack.track_points
+    : (trackData?.track_points || []);
+  const rotation = liveTrack?.track_points && liveTrack.track_points.length > 0 ? 0 : (trackData?.rotation || 0);
+  const currentLap = live.frame?.lap ?? 0;
+  const trackRefining = !!liveTrack && currentLap < 3;
+  const trackUnavailable = trackPoints.length === 0;
   const driversRaw = live.frame?.drivers || [];
   const drivers = isQualifying ? driversRaw.filter((d) => !d.retired) : driversRaw;
   const trackStatus = live.frame?.status || "green";
@@ -411,17 +417,19 @@ export default function LivePage() {
                 </div>
               )}
 
-              {/* Live positions unavailable overlay */}
-              <div className="absolute inset-0 z-10 flex items-end justify-center pointer-events-none pb-4">
-                <div className="bg-f1-card/90 border border-f1-border rounded-lg px-4 py-2.5 backdrop-blur-sm text-center max-w-sm">
-                  <p className="text-f1-muted text-xs leading-relaxed">
-                    Driver track positions and telemetry are not available during live sessions.
-                    These will be available in replay once the session is processed.
-                  </p>
+              {trackRefining && (
+                <div className="absolute bottom-2 right-2 z-10 pointer-events-none">
+                  <div className="bg-f1-card/80 border border-f1-border rounded px-2 py-1 backdrop-blur-sm">
+                    <p className="text-f1-muted text-[10px] leading-tight">Refining track…</p>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {trackPoints.length > 0 ? (
+              {trackUnavailable ? (
+                <div className="h-full flex items-center justify-center">
+                  <p className="text-f1-muted text-sm">Building track from live positions…</p>
+                </div>
+              ) : (
                 <TrackCanvas
                   trackPoints={trackPoints}
                   rotation={rotation}
@@ -438,10 +446,6 @@ export default function LivePage() {
                   showDriverNames={settings.showDriverNames}
                   corners={settings.showCorners ? trackData?.corners : null}
                 />
-              ) : (
-                <div className="h-full flex items-center justify-center">
-                  <p className="text-f1-muted text-sm">Track data not available</p>
-                </div>
               )}
 
               {/* Fullscreen toggle - top-left */}

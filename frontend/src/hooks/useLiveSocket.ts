@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { wsUrl } from "@/lib/api";
-import type { ReplayDriver, ReplayFrame, WeatherData, QualiPhase, RCMessage } from "./useReplaySocket";
+import type { ReplayDriver, ReplayFrame, WeatherData, QualiPhase, RCMessage, LiveTrackData } from "./useReplaySocket";
 
-export { type ReplayDriver, type ReplayFrame, type WeatherData, type QualiPhase, type RCMessage };
+export { type ReplayDriver, type ReplayFrame, type WeatherData, type QualiPhase, type RCMessage, type LiveTrackData };
 
 interface LiveState {
   connected: boolean;
@@ -123,6 +123,7 @@ export function useLiveSocket(
             status: msg.status,
             weather: msg.weather,
             quali_phase: msg.quali_phase,
+            live_track: msg.live_track ?? null,
           };
           const rcMessages: RCMessage[] = msg.rc_messages || [];
 
